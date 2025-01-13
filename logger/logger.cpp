@@ -33,7 +33,7 @@ void Logger::setLogDir(const QString &dirPath)
 
     if (!dir.mkpath("."))
     {
-        qCritical() << "Не удалось создать папку: " + logsDir_;
+        qCritical().noquote() << "Не удалось создать папку: " + logsDir_;
         throw;
     }
 
@@ -55,7 +55,7 @@ void Logger::deleteLogs()
     QDir dir {logsDir_};
     const QStringList files {dir.entryList()};
 
-    qInfo() << "Отчистка старых логов из: " + logsDir_ + " начата";
+    qInfo().noquote() << "Отчистка старых логов из: " + logsDir_ + " начата";
 
     // Перебираем имена файлов в дирректории
     for (const auto &fileName : files)
@@ -64,11 +64,11 @@ void Logger::deleteLogs()
         // Если последнее изменение было > времени жизни логов, то удаляем этот файл
         if (QFileInfo {fileFullPath}.lastModified().daysTo(QDateTime::currentDateTime()) > logsLifeTime_)
         {
-            qInfo() <<  "Удаление файла: " + fileFullPath + (QFile::remove(fileFullPath) ? " успешно" : " не удалось");
+            qInfo().noquote() <<  "Удаление файла: " + fileFullPath + (QFile::remove(fileFullPath) ? " успешно" : " не удалось");
         }
     }
 
-    qInfo() << "Отчистка старых логов из: " + logsDir_ + " завершена";
+    qInfo().noquote() << "Отчистка старых логов из: " + logsDir_ + " завершена";
 }
 
 void Logger::setLogsLifeTime(const int &days)
@@ -117,57 +117,43 @@ void Logger::log(QString message, QtMsgType type)
     }
 
     QString logStr;
-
     QTextStream fStream {&logStr};
-    QTextStream stdStream {stdout};
 
     fStream << (QTime::currentTime().toString("hh:mm:ss.zzz") + " | ");
-    stdStream << (QTime::currentTime().toString("hh:mm:ss.zzz") + " | ");
 
     switch (type)
     {
     case QtMsgType::QtDebugMsg:
     {
         fStream << "DEBUG    | ";
-        stdStream << "\x1b[1;30mDEBUG\x1b[0m    | ";
         break;
     }
     case QtMsgType::QtInfoMsg:
     {
         fStream << "INFO     | ";
-        stdStream << "\x1b[1;34mINFO\x1b[0m     | ";
         break;
     }
     case QtMsgType::QtWarningMsg:
     {
         fStream << "WARNING  | ";
-        stdStream << "\x1b[1;33mWARNING\x1b[0m  | ";
         break;
     }
     case QtMsgType::QtCriticalMsg:
     {
         fStream << "CRITICAL | ";
-        stdStream << "\x1b[1;31mCRITICAL\x1b[0m | ";
         break;
     }
     case QtMsgType::QtFatalMsg:
     {
         fStream << "FATAL    | ";
-        stdStream << "\x1b[1;31mFATAL\x1b[0m    | ";
         break;
     }
     }
 
-    fStream << message;
-    stdStream << message;
-
-    fStream << '\n';
-    stdStream << '\n';
-
+    fStream << message << '\n';
     fStream.flush();
-    stdStream.flush();
 
-    if (!(logLevel_ != 0 && type == QtMsgType::QtDebugMsg))
+    if (logLevel_ == 0 || type != QtMsgType::QtDebugMsg)
     {
         logFile.write(logStr.toUtf8());
         logFile.flush();
@@ -179,8 +165,9 @@ void Logger::log(QString message, QtMsgType type)
 
 void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
-    QString logStr;
-    QString functName {QString {context.function}.split('(').first().split(' ').last()};
+    QString functName (context.function);
+    functName.remove(functName.indexOf('('), functName.length());
+    functName.remove(0, functName.lastIndexOf(' ') + 1);
 
     if (functName.isEmpty())
     {
@@ -193,13 +180,49 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
     }
 
 
-    logStr += functName.leftJustified(MAX_FNAME_LEN, ' ', true);
-    logStr += QString {", line "};
-    logStr += QString::number(context.line).rightJustified(4) + " | ";
-    logStr += msg;
+    QString message;
+    message += functName.leftJustified(MAX_FNAME_LEN, ' ', true);
+    message += QString {", line "};
+    message += QString::number(context.line).rightJustified(4) + " | ";
+    message += msg;
+
+    QTextStream stdStream (type == QtMsgType::QtDebugMsg || type == QtMsgType::QtInfoMsg ? stdout : stderr);
+
+    stdStream << (QTime::currentTime().toString("hh:mm:ss.zzz") + " | ");
+
+    switch (type)
+    {
+    case QtMsgType::QtDebugMsg:
+    {
+        stdStream << "\x1b[1;30mDEBUG\x1b[0m    | ";
+        break;
+    }
+    case QtMsgType::QtInfoMsg:
+    {
+        stdStream << "\x1b[1;34mINFO\x1b[0m     | ";
+        break;
+    }
+    case QtMsgType::QtWarningMsg:
+    {
+        stdStream << "\x1b[1;33mWARNING\x1b[0m  | ";
+        break;
+    }
+    case QtMsgType::QtCriticalMsg:
+    {
+        stdStream << "\x1b[1;31mCRITICAL\x1b[0m | ";
+        break;
+    }
+    case QtMsgType::QtFatalMsg:
+    {
+        stdStream << "\x1b[1;31mFATAL\x1b[0m    | ";
+        break;
+    }
+    }
+
+    stdStream << message << '\n';
 
     QMetaObject::invokeMethod(&Logger::instance(), "log", Qt::QueuedConnection,
-                              Q_ARG(QString, logStr),
+                              Q_ARG(QString, message),
                               Q_ARG(QtMsgType, type));
 
     // QString {context.function}.split('(').first().split(' ').last()
