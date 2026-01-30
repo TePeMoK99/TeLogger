@@ -4,7 +4,7 @@
 #include <QJsonArray>
 #include <QJsonParseError>
 
-#include "logger/logger.h"
+#include "logger/telogger.h"
 
 int main(int argc, char *argv[])
 {

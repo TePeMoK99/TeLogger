@@ -1,4 +1,15 @@
-﻿#include "logger.h"
+﻿#include "telogger.h"
+
+#include <QDebug>
+#include <QDateTime>
+#include <QTime>
+#include <QFile>
+#include <QDir>
+#include <QTextStream>
+#include <QFileInfo>
+#include <QThread>
+#include <QSettings>
+#include <QCoreApplication>
 
 Logger::Logger() :
     QObject         {nullptr},

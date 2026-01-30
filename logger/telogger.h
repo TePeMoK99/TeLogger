@@ -1,16 +1,6 @@
 ﻿#pragma once
 
 #include <QObject>
-#include <QDebug>
-#include <QDateTime>
-#include <QTime>
-#include <QFile>
-#include <QDir>
-#include <QTextStream>
-#include <QFileInfo>
-#include <QThread>
-#include <QSettings>
-#include <QCoreApplication>
 
 /**
  * Настройка - все настройки меняются в автозаполняемом конфиг-файле log.ini
