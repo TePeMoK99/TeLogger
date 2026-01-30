@@ -13,10 +13,10 @@
 #include <QTimerEvent>
 
 Qt::ConnectionType Logger::logConnectionType {Qt::QueuedConnection};
+QString Logger::confPath {};
 
 Logger::Logger() :
     QObject         {nullptr},
-    confPath        {qApp->applicationDirPath() + "/../log.ini"},
     logsDir_        {qApp->applicationDirPath() + "/Logs"},
     logsName_       {"log_%1.log"},
     logsLifeTime_   {30},
@@ -25,6 +25,14 @@ Logger::Logger() :
 {
     qRegisterMetaType<QtMsgType>("QtMsgType");
 
+    if (confPath.isEmpty())
+    {
+#if defined(Q_OS_WIN)
+        confPath = qApp->applicationDirPath() + "/log.ini";
+#else
+        confPath = qApp->applicationDirPath() + "/../log.ini";
+#endif
+    }
     readConfigs();
 
     QThread* thread {new QThread {qApp}};
@@ -80,8 +88,8 @@ void Logger::setConfPath(QString path)
         confPath != absolutePath)
     {
         confPath = absolutePath;
-        QMetaObject::invokeMethod(this, &Logger::deleteLogs, Qt::QueuedConnection);
-        QMetaObject::invokeMethod(this, &Logger::readConfigs, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(&Logger::instance(), &Logger::deleteLogs, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(&Logger::instance(), &Logger::readConfigs, Qt::QueuedConnection);
     }
 }
 

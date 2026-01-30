@@ -20,8 +20,7 @@ public:
 
     QString getFullLogPath() const;
 
-    void setConfPath(QString path);
-
+    static void setConfPath(QString path);
     static void setLogConnectionType(Qt::ConnectionType newLogConnectionType);
 
 public slots:
@@ -50,7 +49,7 @@ private:
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
 
-    QString confPath;
+    static QString confPath;
 
     QString logsDir_;
     QString logsName_;
