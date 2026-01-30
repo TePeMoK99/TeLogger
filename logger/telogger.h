@@ -11,6 +11,7 @@
  */
 
 class QSettings;
+class QTimer;
 
 class TELOGGER_EXPORT Logger : public QObject
 {
@@ -28,9 +29,6 @@ public slots:
 
 signals:
     void logWritten(QString logMsg);
-
-protected:
-    void timerEvent(QTimerEvent *event) override;
 
 private slots:
     void deleteLogs();
@@ -59,6 +57,8 @@ private:
 
     bool dirCreated_;
     static Qt::ConnectionType logConnectionType;
+
+    QTimer *syncTimer {nullptr};
 
     static constexpr int MAX_FNAME_LEN = 30;
 };

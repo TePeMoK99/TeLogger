@@ -10,7 +10,7 @@
 #include <QThread>
 #include <QSettings>
 #include <QCoreApplication>
-#include <QTimerEvent>
+#include <QTimer>
 
 Qt::ConnectionType Logger::logConnectionType {Qt::QueuedConnection};
 QString Logger::confPath {};
@@ -35,13 +35,18 @@ Logger::Logger() :
     }
     readConfigs();
 
-    QThread* thread {new QThread {qApp}};
+    QThread* thread {new QThread {nullptr}};
     connect(qApp, &QCoreApplication::aboutToQuit, thread, &QThread::quit);
     connect(thread, &QThread::finished, this, &Logger::deleteLater);
-    this->moveToThread(thread);
-    connect(thread, &QThread::started, this, [this] {
-        startTimer(30'000);
+    connect(thread, &QThread::started, this, [this, thread] {
+        syncTimer = new QTimer(nullptr);
+        connect(thread, &QThread::finished, syncTimer, &QTimer::deleteLater);
+        syncTimer->setInterval(30'000);
+        syncTimer->callOnTimeout(this, &Logger::readConfigs);
+        syncTimer->start();
     });
+
+    this->moveToThread(thread);
     thread->start();
 
     qInstallMessageHandler(Logger::messageHandler);
@@ -134,6 +139,11 @@ void Logger::setLogLevel(const int &level)
 
 void Logger::log(QString message, QtMsgType type)
 {
+    if (logLevel_ != 0 && type == QtMsgType::QtDebugMsg)
+    {
+        return;
+    }
+
     if (!dirCreated_)
     {
         setLogDir(logsDir_);
@@ -198,26 +208,21 @@ void Logger::log(QString message, QtMsgType type)
     fStream << message << '\n';
     fStream.flush();
 
-    if (logLevel_ == 0 || type != QtMsgType::QtDebugMsg)
-    {
-        logFile.write(logStr.toUtf8());
-        logFile.flush();
-        logFile.close();
-    }
+    logFile.write(logStr.toUtf8());
+    logFile.flush();
+    logFile.close();
 
     emit logWritten(logStr);
-}
-
-void Logger::timerEvent(QTimerEvent *event)
-{
-    Q_UNUSED(event)
-    readConfigs();
 }
 
 void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     QString functName (context.function);
     functName.truncate(functName.indexOf('('));
+    if (functName.startsWith("virtual "))
+    {
+        functName.remove(0, 8);
+    }
     functName.remove(0, functName.lastIndexOf(' ') + 1);
 
     if (functName.isEmpty())
