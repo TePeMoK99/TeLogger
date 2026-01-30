@@ -35,8 +35,8 @@ private:
 
     // Singleton
     Logger();
-    Logger(const Logger&) = 0;
-    Logger& operator=(const Logger&) = 0;
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
 
     QString logsDir_;
     QString logsName_;

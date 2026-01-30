@@ -6,8 +6,9 @@
 #if defined(Q_OS_WIN)
 #if defined(TELOGGER_LIB)
 #define TELOGGER_EXPORT Q_DECL_EXPORT
-#elif
+#else
 #define TELOGGER_EXPORT Q_DECL_IMPORT
+#endif
 #else
 #define TELOGGER_EXPORT
 #endif
