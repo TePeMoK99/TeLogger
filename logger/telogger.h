@@ -22,6 +22,8 @@ public:
 
     void setConfPath(QString path);
 
+    static void setLogConnectionType(Qt::ConnectionType newLogConnectionType);
+
 public slots:
     void log(QString message, QtMsgType type);
 
@@ -54,6 +56,7 @@ private:
     int logLevel_;
 
     bool dirCreated_;
+    static Qt::ConnectionType logConnectionType;
 
     static constexpr int MAX_FNAME_LEN = 30;
 };

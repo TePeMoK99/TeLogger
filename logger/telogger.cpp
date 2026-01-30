@@ -11,6 +11,8 @@
 #include <QSettings>
 #include <QCoreApplication>
 
+Qt::ConnectionType Logger::logConnectionType {Qt::QueuedConnection};
+
 Logger::Logger() :
     QObject         {nullptr},
     confPath        {qApp->applicationDirPath() + "/../log.ini"},
@@ -31,6 +33,11 @@ Logger::Logger() :
     thread->start();
 
     qInstallMessageHandler(Logger::messageHandler);
+}
+
+void Logger::setLogConnectionType(Qt::ConnectionType newLogConnectionType)
+{
+    logConnectionType = newLogConnectionType;
 }
 
 Logger& Logger::instance()
@@ -201,7 +208,7 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
     }
     else if (functName.length() > MAX_FNAME_LEN)
     {
-        functName = functName.leftRef(MAX_FNAME_LEN - 3) + "...";
+        functName = functName.left(MAX_FNAME_LEN - 3) + "...";
     }
 
     QString message =
@@ -245,9 +252,14 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
 
     stdStream << message << '\n';
 
-    QMetaObject::invokeMethod(&Logger::instance(), "log", Qt::QueuedConnection,
+#if (QT_VERSION_MAJOR < 6)
+    QMetaObject::invokeMethod(&Logger::instance(), "log", logConnectionType,
                               Q_ARG(QString, message),
                               Q_ARG(QtMsgType, type));
+#else
+    QMetaObject::invokeMethod(&Logger::instance(), &Logger::log, logConnectionType,
+                              message, type);
+#endif
 
     // QString {context.function}.split('(').first().split(' ').last()
     // Убираем список аргументов и убираем тип возвращаемого значения
