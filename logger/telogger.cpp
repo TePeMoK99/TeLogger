@@ -14,6 +14,7 @@
 
 Qt::ConnectionType Logger::logConnectionType {Qt::QueuedConnection};
 QString Logger::confPath {};
+int Logger::maxFnameLen {30};
 
 Logger::Logger() :
     QObject         {nullptr},
@@ -50,6 +51,11 @@ Logger::Logger() :
     thread->start();
 
     qInstallMessageHandler(Logger::messageHandler);
+}
+
+void Logger::setMaxFnameLen(int newMaxFnameLen)
+{
+    maxFnameLen = newMaxFnameLen;
 }
 
 void Logger::setLogConnectionType(Qt::ConnectionType newLogConnectionType)
@@ -229,13 +235,13 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
     {
         functName = "...";
     }
-    else if (functName.length() > MAX_FNAME_LEN)
+    else if (functName.length() > maxFnameLen)
     {
-        functName = functName.left(MAX_FNAME_LEN - 3) + "...";
+        functName = functName.left(maxFnameLen - 3) + "...";
     }
 
     QString message =
-        functName.leftJustified(MAX_FNAME_LEN, ' ', true) +
+        functName.leftJustified(maxFnameLen, ' ', true) +
         ", line " +
         QString::number(context.line).rightJustified(4) + " | " +
         msg;
