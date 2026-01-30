@@ -1,2 +1,4 @@
 /.qtcreator
 /lib
+/build
+*.user

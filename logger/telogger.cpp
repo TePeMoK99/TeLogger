@@ -10,6 +10,7 @@
 #include <QThread>
 #include <QSettings>
 #include <QCoreApplication>
+#include <QTimerEvent>
 
 Qt::ConnectionType Logger::logConnectionType {Qt::QueuedConnection};
 
@@ -30,6 +31,9 @@ Logger::Logger() :
     connect(qApp, &QCoreApplication::aboutToQuit, thread, &QThread::quit);
     connect(thread, &QThread::finished, this, &Logger::deleteLater);
     this->moveToThread(thread);
+    connect(thread, &QThread::started, this, [this] {
+        startTimer(30'000);
+    });
     thread->start();
 
     qInstallMessageHandler(Logger::messageHandler);
@@ -194,6 +198,12 @@ void Logger::log(QString message, QtMsgType type)
     }
 
     emit logWritten(logStr);
+}
+
+void Logger::timerEvent(QTimerEvent *event)
+{
+    Q_UNUSED(event)
+    readConfigs();
 }
 
 void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)

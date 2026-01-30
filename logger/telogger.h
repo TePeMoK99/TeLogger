@@ -30,6 +30,9 @@ public slots:
 signals:
     void logWritten(QString logMsg);
 
+protected:
+    void timerEvent(QTimerEvent *event) override;
+
 private slots:
     void deleteLogs();
     void readConfigs();
