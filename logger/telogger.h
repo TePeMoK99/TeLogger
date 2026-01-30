@@ -2,6 +2,8 @@
 
 #include <QObject>
 
+#include "telogger_global.h"
+
 /**
  * Настройка - все настройки меняются в автозаполняемом конфиг-файле log.ini
  * Использование:
@@ -33,8 +35,8 @@ private:
 
     // Singleton
     Logger();
-    Logger(const Logger&);
-    Logger& operator=(const Logger&);
+    Logger(const Logger&) = 0;
+    Logger& operator=(const Logger&) = 0;
 
     QString logsDir_;
     QString logsName_;
