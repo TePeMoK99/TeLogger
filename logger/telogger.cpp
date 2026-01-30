@@ -13,6 +13,7 @@
 
 Logger::Logger() :
     QObject         {nullptr},
+    confPath        {qApp->applicationDirPath() + "/../log.ini"},
     logsDir_        {qApp->applicationDirPath() + "/Logs"},
     logsName_       {"log_%1.log"},
     logsLifeTime_   {30},
@@ -23,7 +24,8 @@ Logger::Logger() :
 
     readConfigs();
 
-    QThread* thread {new QThread {nullptr}};
+    QThread* thread {new QThread {qApp}};
+    connect(qApp, &QCoreApplication::aboutToQuit, thread, &QThread::quit);
     connect(thread, &QThread::finished, this, &Logger::deleteLater);
     this->moveToThread(thread);
     thread->start();
@@ -61,19 +63,32 @@ QString Logger::getFullLogPath() const
     return logsName_;
 }
 
+void Logger::setConfPath(QString path)
+{
+    if (QString absolutePath = QFileInfo(path).absoluteFilePath();
+        confPath != absolutePath)
+    {
+        confPath = absolutePath;
+        QMetaObject::invokeMethod(this, &Logger::deleteLogs, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, &Logger::readConfigs, Qt::QueuedConnection);
+    }
+}
+
 void Logger::deleteLogs()
 {
     QDir dir {logsDir_};
-    const QStringList files {dir.entryList()};
+    const QFileInfoList files {dir.entryInfoList()};
 
     qInfo().noquote() << "Отчистка старых логов из: " + logsDir_ + " начата";
 
     // Перебираем имена файлов в дирректории
-    for (const auto &fileName : files)
+    for (const QFileInfo &file : std::as_const(files))
     {
-        const QString fileFullPath {logsDir_ + "/" + fileName};
+        if (!file.isFile())
+            continue;
+        const QString fileFullPath {file.absoluteFilePath()};
         // Если последнее изменение было > времени жизни логов, то удаляем этот файл
-        if (QFileInfo {fileFullPath}.lastModified().daysTo(QDateTime::currentDateTime()) > logsLifeTime_)
+        if (file.lastModified().daysTo(QDateTime::currentDateTime()) > logsLifeTime_)
         {
             qInfo().noquote() <<  "Удаление файла: " + fileFullPath + (QFile::remove(fileFullPath) ? " успешно" : " не удалось");
         }
@@ -177,25 +192,23 @@ void Logger::log(QString message, QtMsgType type)
 void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     QString functName (context.function);
-    functName.remove(functName.indexOf('('), functName.length());
+    functName.truncate(functName.indexOf('('));
     functName.remove(0, functName.lastIndexOf(' ') + 1);
 
     if (functName.isEmpty())
     {
         functName = "...";
     }
-
-    if (functName.length() > MAX_FNAME_LEN)
+    else if (functName.length() > MAX_FNAME_LEN)
     {
-        functName = functName.mid(0, MAX_FNAME_LEN - 3) + "...";
+        functName = functName.leftRef(MAX_FNAME_LEN - 3) + "...";
     }
 
-
-    QString message;
-    message += functName.leftJustified(MAX_FNAME_LEN, ' ', true);
-    message += QString {", line "};
-    message += QString::number(context.line).rightJustified(4) + " | ";
-    message += msg;
+    QString message =
+        functName.leftJustified(MAX_FNAME_LEN, ' ', true) +
+        ", line " +
+        QString::number(context.line).rightJustified(4) + " | " +
+        msg;
 
     QTextStream stdStream (type == QtMsgType::QtDebugMsg || type == QtMsgType::QtInfoMsg ? stdout : stderr);
 
@@ -242,12 +255,16 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
 
 void Logger::readConfigs()
 {
-    QSettings conf {qApp->applicationDirPath() + "/../log.ini", QSettings::IniFormat};
-    qInfo().noquote() << "Путь к конфигу логгера:" << conf.fileName();
+    QSettings conf {confPath, QSettings::IniFormat};
+    // qInfo().noquote() << "Путь к конфигу логгера:" << conf.fileName();
 
     if (!conf.contains("LOGGER/debug"))        conf.setValue("LOGGER/debug",    false);
     if (!conf.contains("LOGGER/lifetime"))     conf.setValue("LOGGER/lifetime", 30);
+#if defined(Q_OS_WIN)
+    if (!conf.contains("LOGGER/dir"))          conf.setValue("LOGGER/dir",      QCoreApplication::applicationDirPath() + "/Logs/");
+#else
     if (!conf.contains("LOGGER/dir"))          conf.setValue("LOGGER/dir",      QCoreApplication::applicationDirPath() + "/../Logs/");
+#endif
     if (!conf.contains("LOGGER/name_pattern")) conf.setValue("LOGGER/name_pattern", "log_%1.log");
 
     setLogLevel(conf.value("LOGGER/debug").toBool() ? 0 : 1);

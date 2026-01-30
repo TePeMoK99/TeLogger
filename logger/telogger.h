@@ -10,18 +10,17 @@
  *  хотя бы один раз вызвать метод Logger::instance(), после этого все Qt-шные сообщения будут дублироваться в файл
  */
 
-class Logger : public QObject
+class QSettings;
+
+class TELOGGER_EXPORT Logger : public QObject
 {
     Q_OBJECT
 public:
     static Logger& instance();
 
-    void setLogFileNamePattern(const QString &fileName);
-    void setLogDir(const QString &dirPath);
     QString getFullLogPath() const;
-    void deleteLogs();
-    void setLogsLifeTime(const int &days);
-    void setLogLevel(const int &level);
+
+    void setConfPath(QString path);
 
 public slots:
     void log(QString message, QtMsgType type);
@@ -29,14 +28,24 @@ public slots:
 signals:
     void logWritten(QString logMsg);
 
+private slots:
+    void deleteLogs();
+    void readConfigs();
+
 private:
     static void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg);
-    void readConfigs();
+
+    void setLogFileNamePattern(const QString &fileName);
+    void setLogDir(const QString &dirPath);
+    void setLogsLifeTime(const int &days);
+    void setLogLevel(const int &level);
 
     // Singleton
     Logger();
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
+
+    QString confPath;
 
     QString logsDir_;
     QString logsName_;
