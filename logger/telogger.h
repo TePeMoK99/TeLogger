@@ -17,6 +17,17 @@ class TELOGGER_EXPORT Logger : public QObject
 {
     Q_OBJECT
 public:
+
+    class TELOGGER_EXPORT LoggerException : public std::exception {
+    public:
+        LoggerException(QString message);
+
+        const char *what() const noexcept override;
+
+    private:
+        QString m_message;
+    };
+
     static Logger& instance();
 
     QString getFullLogPath() const;

@@ -77,7 +77,7 @@ void Logger::setLogDir(const QString &dirPath)
     if (!dir.mkpath("."))
     {
         qCritical().noquote() << "Не удалось создать папку: " + logsDir_;
-        throw;
+        throw LoggerException("Cannot create folder " + logsDir_);
     }
 
     dirCreated_ = true;
@@ -340,6 +340,11 @@ void Logger::readConfigs()
     setLogFileNamePattern(conf.value("LOGGER/name_pattern").toString());
 }
 
+Logger::LoggerException::LoggerException(QString message) : m_message {message}
+{}
 
-
-
+const char *Logger::LoggerException::what() const noexcept
+{
+    const char *data = m_message.toUtf8().constData();
+    return data;
+}
