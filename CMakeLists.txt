@@ -32,6 +32,7 @@ if (WIN32 AND build_type STREQUAL debug)
 endif()
 
 add_compile_definitions(TeLogger TELOGGER_LIB PRIVATE)
+add_compile_definitions(TeLogger QT_MESSAGELOGCONTEXT PRIVATE)
 
 target_include_directories(TeLogger PUBLIC ${CMAKE_SOURCE_DIR}/logger)
 
