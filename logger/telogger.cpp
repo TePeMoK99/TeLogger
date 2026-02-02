@@ -140,14 +140,40 @@ void Logger::setLogsLifeTime(const int &days)
 
 void Logger::setLogLevel(const int &level)
 {
-    logLevel_ = level;
+    if (level < 0)
+    {
+        logLevel_ = 0;
+    }
+    else if (level > 2)
+    {
+        logLevel_ = 2;
+    }
+    else
+    {
+        logLevel_ = level;
+    }
 }
 
 void Logger::log(QString message, QtMsgType type)
 {
-    if (logLevel_ != 0 && type == QtMsgType::QtDebugMsg)
+    switch (logLevel_)
     {
-        return;
+    case 2:
+    {
+        if (type == QtInfoMsg)
+        {
+            return;
+        }
+        Q_FALLTHROUGH;
+    }
+    case 1:
+    {
+        if (type == QtDebugMsg)
+        {
+            return;
+        }
+        break;
+    }
     }
 
     if (!dirCreated_)
@@ -299,7 +325,7 @@ void Logger::readConfigs()
     QSettings conf {confPath, QSettings::IniFormat};
     // qInfo().noquote() << "Путь к конфигу логгера:" << conf.fileName();
 
-    if (!conf.contains("LOGGER/debug"))        conf.setValue("LOGGER/debug",    false);
+    if (!conf.contains("LOGGER/log_level"))     conf.setValue("LOGGER/log_level", 1);
     if (!conf.contains("LOGGER/lifetime"))     conf.setValue("LOGGER/lifetime", 30);
 #if defined(Q_OS_WIN)
     if (!conf.contains("LOGGER/dir"))          conf.setValue("LOGGER/dir",      QCoreApplication::applicationDirPath() + "/Logs/");
@@ -308,7 +334,7 @@ void Logger::readConfigs()
 #endif
     if (!conf.contains("LOGGER/name_pattern")) conf.setValue("LOGGER/name_pattern", "log_%1.log");
 
-    setLogLevel(conf.value("LOGGER/debug").toBool() ? 0 : 1);
+    setLogLevel(conf.value("LOGGER/log_level").toInt());
     setLogDir(conf.value("LOGGER/dir").toString());
     setLogsLifeTime(conf.value("LOGGER/lifetime").toInt());
     setLogFileNamePattern(conf.value("LOGGER/name_pattern").toString());
