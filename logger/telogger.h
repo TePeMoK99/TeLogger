@@ -63,6 +63,3 @@ private:
 
     static int maxFnameLen;
 };
-
-
-

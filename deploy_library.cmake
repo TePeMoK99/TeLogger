@@ -13,7 +13,8 @@ file(COPY
 )
 
 file(GENERATE OUTPUT ${DEPLOY_DIR}/include/TeLogger
-    CONTENT "#include \"telogger.h\""
+    CONTENT "#include \"telogger.h\"
+    "
 )
 
 set(LIB_NAME "libTeLogger")
