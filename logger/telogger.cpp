@@ -164,7 +164,7 @@ void Logger::log(QString message, QtMsgType type)
         {
             return;
         }
-        Q_FALLTHROUGH;
+        Q_FALLTHROUGH();
     }
     case 1:
     {
