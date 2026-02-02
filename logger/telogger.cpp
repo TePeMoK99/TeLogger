@@ -1,4 +1,20 @@
-﻿#include "logger.h"
+﻿#include "telogger.h"
+
+#include <QDebug>
+#include <QDateTime>
+#include <QTime>
+#include <QFile>
+#include <QDir>
+#include <QTextStream>
+#include <QFileInfo>
+#include <QThread>
+#include <QSettings>
+#include <QCoreApplication>
+#include <QTimer>
+
+Qt::ConnectionType Logger::logConnectionType {Qt::QueuedConnection};
+QString Logger::confPath {};
+int Logger::maxFnameLen {30};
 
 Logger::Logger() :
     QObject         {nullptr},
@@ -10,14 +26,41 @@ Logger::Logger() :
 {
     qRegisterMetaType<QtMsgType>("QtMsgType");
 
+    if (confPath.isEmpty())
+    {
+#if defined(Q_OS_WIN)
+        confPath = qApp->applicationDirPath() + "/log.ini";
+#else
+        confPath = qApp->applicationDirPath() + "/../log.ini";
+#endif
+    }
     readConfigs();
 
     QThread* thread {new QThread {nullptr}};
+    connect(qApp, &QCoreApplication::aboutToQuit, thread, &QThread::quit);
     connect(thread, &QThread::finished, this, &Logger::deleteLater);
+    connect(thread, &QThread::started, this, [this, thread] {
+        syncTimer = new QTimer(nullptr);
+        connect(thread, &QThread::finished, syncTimer, &QTimer::deleteLater);
+        syncTimer->setInterval(30'000);
+        syncTimer->callOnTimeout(this, &Logger::readConfigs);
+        syncTimer->start();
+    });
+
     this->moveToThread(thread);
     thread->start();
 
     qInstallMessageHandler(Logger::messageHandler);
+}
+
+void Logger::setMaxFnameLen(int newMaxFnameLen)
+{
+    maxFnameLen = newMaxFnameLen;
+}
+
+void Logger::setLogConnectionType(Qt::ConnectionType newLogConnectionType)
+{
+    logConnectionType = newLogConnectionType;
 }
 
 Logger& Logger::instance()
@@ -34,7 +77,7 @@ void Logger::setLogDir(const QString &dirPath)
     if (!dir.mkpath("."))
     {
         qCritical().noquote() << "Не удалось создать папку: " + logsDir_;
-        throw;
+        throw LoggerException("Cannot create folder " + logsDir_);
     }
 
     dirCreated_ = true;
@@ -50,19 +93,32 @@ QString Logger::getFullLogPath() const
     return logsName_;
 }
 
+void Logger::setConfPath(QString path)
+{
+    if (QString absolutePath = QFileInfo(path).absoluteFilePath();
+        confPath != absolutePath)
+    {
+        confPath = absolutePath;
+        QMetaObject::invokeMethod(&Logger::instance(), &Logger::deleteLogs, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(&Logger::instance(), &Logger::readConfigs, Qt::QueuedConnection);
+    }
+}
+
 void Logger::deleteLogs()
 {
     QDir dir {logsDir_};
-    const QStringList files {dir.entryList()};
+    const QFileInfoList files {dir.entryInfoList()};
 
     qInfo().noquote() << "Отчистка старых логов из: " + logsDir_ + " начата";
 
     // Перебираем имена файлов в дирректории
-    for (const auto &fileName : files)
+    for (const QFileInfo &file : std::as_const(files))
     {
-        const QString fileFullPath {logsDir_ + "/" + fileName};
+        if (!file.isFile())
+            continue;
+        const QString fileFullPath {file.absoluteFilePath()};
         // Если последнее изменение было > времени жизни логов, то удаляем этот файл
-        if (QFileInfo {fileFullPath}.lastModified().daysTo(QDateTime::currentDateTime()) > logsLifeTime_)
+        if (file.lastModified().daysTo(QDateTime::currentDateTime()) > logsLifeTime_)
         {
             qInfo().noquote() <<  "Удаление файла: " + fileFullPath + (QFile::remove(fileFullPath) ? " успешно" : " не удалось");
         }
@@ -84,11 +140,42 @@ void Logger::setLogsLifeTime(const int &days)
 
 void Logger::setLogLevel(const int &level)
 {
-    logLevel_ = level;
+    if (level < 0)
+    {
+        logLevel_ = 0;
+    }
+    else if (level > 2)
+    {
+        logLevel_ = 2;
+    }
+    else
+    {
+        logLevel_ = level;
+    }
 }
 
 void Logger::log(QString message, QtMsgType type)
 {
+    switch (logLevel_)
+    {
+    case 2:
+    {
+        if (type == QtInfoMsg)
+        {
+            return;
+        }
+        Q_FALLTHROUGH();
+    }
+    case 1:
+    {
+        if (type == QtDebugMsg)
+        {
+            return;
+        }
+        break;
+    }
+    }
+
     if (!dirCreated_)
     {
         setLogDir(logsDir_);
@@ -153,12 +240,9 @@ void Logger::log(QString message, QtMsgType type)
     fStream << message << '\n';
     fStream.flush();
 
-    if (logLevel_ == 0 || type != QtMsgType::QtDebugMsg)
-    {
-        logFile.write(logStr.toUtf8());
-        logFile.flush();
-        logFile.close();
-    }
+    logFile.write(logStr.toUtf8());
+    logFile.flush();
+    logFile.close();
 
     emit logWritten(logStr);
 }
@@ -166,25 +250,27 @@ void Logger::log(QString message, QtMsgType type)
 void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     QString functName (context.function);
-    functName.remove(functName.indexOf('('), functName.length());
+    functName.truncate(functName.indexOf('('));
+    if (functName.startsWith("virtual "))
+    {
+        functName.remove(0, 8);
+    }
     functName.remove(0, functName.lastIndexOf(' ') + 1);
 
     if (functName.isEmpty())
     {
         functName = "...";
     }
-
-    if (functName.length() > MAX_FNAME_LEN)
+    else if (functName.length() > maxFnameLen)
     {
-        functName = functName.mid(0, MAX_FNAME_LEN - 3) + "...";
+        functName = functName.left(maxFnameLen - 3) + "...";
     }
 
-
-    QString message;
-    message += functName.leftJustified(MAX_FNAME_LEN, ' ', true);
-    message += QString {", line "};
-    message += QString::number(context.line).rightJustified(4) + " | ";
-    message += msg;
+    QString message =
+        functName.leftJustified(maxFnameLen, ' ', true) +
+        ", line " +
+        QString::number(context.line).rightJustified(4) + " | " +
+        msg;
 
     QTextStream stdStream (type == QtMsgType::QtDebugMsg || type == QtMsgType::QtInfoMsg ? stdout : stderr);
 
@@ -221,9 +307,14 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
 
     stdStream << message << '\n';
 
-    QMetaObject::invokeMethod(&Logger::instance(), "log", Qt::QueuedConnection,
+#if (QT_VERSION_MAJOR < 6)
+    QMetaObject::invokeMethod(&Logger::instance(), "log", logConnectionType,
                               Q_ARG(QString, message),
                               Q_ARG(QtMsgType, type));
+#else
+    QMetaObject::invokeMethod(&Logger::instance(), &Logger::log, logConnectionType,
+                              message, type);
+#endif
 
     // QString {context.function}.split('(').first().split(' ').last()
     // Убираем список аргументов и убираем тип возвращаемого значения
@@ -231,20 +322,29 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
 
 void Logger::readConfigs()
 {
-    QSettings conf {qApp->applicationDirPath() + "/../log.ini", QSettings::IniFormat};
-    qInfo().noquote() << "Путь к конфигу логгера:" << conf.fileName();
+    QSettings conf {confPath, QSettings::IniFormat};
+    // qInfo().noquote() << "Путь к конфигу логгера:" << conf.fileName();
 
-    if (!conf.contains("LOGGER/debug"))        conf.setValue("LOGGER/debug",    false);
+    if (!conf.contains("LOGGER/log_level"))     conf.setValue("LOGGER/log_level", 1);
     if (!conf.contains("LOGGER/lifetime"))     conf.setValue("LOGGER/lifetime", 30);
+#if defined(Q_OS_WIN)
+    if (!conf.contains("LOGGER/dir"))          conf.setValue("LOGGER/dir",      QCoreApplication::applicationDirPath() + "/Logs/");
+#else
     if (!conf.contains("LOGGER/dir"))          conf.setValue("LOGGER/dir",      QCoreApplication::applicationDirPath() + "/../Logs/");
+#endif
     if (!conf.contains("LOGGER/name_pattern")) conf.setValue("LOGGER/name_pattern", "log_%1.log");
 
-    setLogLevel(conf.value("LOGGER/debug").toBool() ? 0 : 1);
+    setLogLevel(conf.value("LOGGER/log_level").toInt());
     setLogDir(conf.value("LOGGER/dir").toString());
     setLogsLifeTime(conf.value("LOGGER/lifetime").toInt());
     setLogFileNamePattern(conf.value("LOGGER/name_pattern").toString());
 }
 
+Logger::LoggerException::LoggerException(QString message) : m_message {message}
+{}
 
-
-
+const char *Logger::LoggerException::what() const noexcept
+{
+    const char *data = m_message.toUtf8().constData();
+    return data;
+}
