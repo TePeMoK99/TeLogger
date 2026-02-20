@@ -34,7 +34,7 @@ endif()
 add_compile_definitions(TeLogger TELOGGER_LIB PRIVATE)
 add_compile_definitions(TeLogger QT_MESSAGELOGCONTEXT PRIVATE)
 
-target_include_directories(TeLogger PUBLIC ${CMAKE_SOURCE_DIR}/logger)
+target_include_directories(TeLogger PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/logger)
 
 include(GNUInstallDirs)
 install(TARGETS TeLogger
