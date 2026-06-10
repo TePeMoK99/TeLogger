@@ -266,13 +266,16 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
         functName = functName.left(maxFnameLen - 3) + "...";
     }
 
-    QString message =
+    const QString message =
         functName.leftJustified(maxFnameLen, ' ', true) +
         ", line " +
         QString::number(context.line).rightJustified(4) + " | " +
         msg;
 
     QTextStream stdStream (type == QtMsgType::QtDebugMsg || type == QtMsgType::QtInfoMsg ? stdout : stderr);
+#if QT_VERSION > QT_VERSION_CHECK(6,0,0)
+    stdStream.setEncoding(QStringConverter::System);
+#endif
 
     stdStream << (QTime::currentTime().toString("hh:mm:ss.zzz") + " | ");
 
@@ -307,12 +310,14 @@ void Logger::messageHandler(QtMsgType type, const QMessageLogContext &context, c
 
     stdStream << message << '\n';
 
+    const Qt::ConnectionType connType = (type == QtMsgType::QtFatalMsg ? Qt::BlockingQueuedConnection : logConnectionType);
+
 #if (QT_VERSION_MAJOR < 6)
-    QMetaObject::invokeMethod(&Logger::instance(), "log", logConnectionType,
+    QMetaObject::invokeMethod(&Logger::instance(), "log", connType,
                               Q_ARG(QString, message),
                               Q_ARG(QtMsgType, type));
 #else
-    QMetaObject::invokeMethod(&Logger::instance(), &Logger::log, logConnectionType,
+    QMetaObject::invokeMethod(&Logger::instance(), &Logger::log, connType,
                               message, type);
 #endif
 
